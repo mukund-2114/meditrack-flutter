@@ -16,6 +16,7 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
   final _addressController = TextEditingController();
   final _contactController = TextEditingController();
   PatientStatus _selectedStatus = PatientStatus.stable;
+  String _selectedGender = 'Not specified';
 
   @override
   void dispose() {
@@ -133,6 +134,35 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
               ),
               const SizedBox(height: 16),
 
+              DropdownButtonFormField<String>(
+                value: _selectedGender,
+                decoration: const InputDecoration(
+                  labelText: 'Gender',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'Male',
+                    child: Text('Male'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'Female',
+                    child: Text('Female'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'Not specified',
+                    child: Text('Not specified'),
+                  ),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedGender = value!;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+
               DropdownButtonFormField<PatientStatus>(
                 value: _selectedStatus,
                 decoration: const InputDecoration(
@@ -159,8 +189,10 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
                   if (_formKey.currentState!.validate()) {
                     final newPatient = Patient(
                       id: DateTime.now().toString(),
+                      userId: 'user123', // This should be replaced with actual user ID from provider
                       name: _nameController.text,
-                      age: int.parse(_ageController.text),
+                      dob: DateTime.now().subtract(Duration(days: 365 * int.parse(_ageController.text))), // Approximate DOB based on age
+                      gender: _selectedGender,
                       condition: _conditionController.text,
                       status: _selectedStatus,
                       lastChecked: DateTime.now(),

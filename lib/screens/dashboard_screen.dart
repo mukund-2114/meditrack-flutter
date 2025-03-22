@@ -5,10 +5,12 @@ import 'add_patient_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   final List<Patient> patients;
+  final VoidCallback? onRefresh;
 
   const DashboardScreen({
     super.key,
     required this.patients,
+    this.onRefresh,
   });
 
   @override
@@ -25,92 +27,139 @@ class DashboardScreen extends StatelessWidget {
         title: const Text('MediTrack Dashboard'),
         backgroundColor: const Color(0xFF024A59),
         foregroundColor: Colors.white,
+        actions: [
+          if (onRefresh != null)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: onRefresh,
+              tooltip: 'Refresh data',
+            ),
+        ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Summary Cards
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
+      body: patients.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildSummaryCard(
-                    'Critical',
-                    criticalPatients.length,
-                    Colors.red,
-                    Icons.warning,
+                  const Icon(
+                    Icons.person_off,
+                    size: 64,
+                    color: Colors.grey,
                   ),
-                  const SizedBox(width: 8),
-                  _buildSummaryCard(
-                    'Moderate',
-                    moderatePatients.length,
-                    Colors.orange,
-                    Icons.info,
+                  const SizedBox(height: 16),
+                  const Text(
+                    'No patients found',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  _buildSummaryCard(
-                    'Stable',
-                    stablePatients.length,
-                    Colors.green,
-                    Icons.check_circle,
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Add patients to get started',
+                    style: TextStyle(
+                      color: Colors.grey,
+                    ),
                   ),
+                  const SizedBox(height: 24),
+                  if (onRefresh != null)
+                    ElevatedButton.icon(
+                      onPressed: onRefresh,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Refresh'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF024A59),
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                ],
+              ),
+            )
+          : SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Summary Cards
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      children: [
+                        _buildSummaryCard(
+                          'Critical',
+                          criticalPatients.length,
+                          Colors.red,
+                          Icons.warning,
+                        ),
+                        const SizedBox(width: 8),
+                        _buildSummaryCard(
+                          'Moderate',
+                          moderatePatients.length,
+                          Colors.orange,
+                          Icons.info,
+                        ),
+                        const SizedBox(width: 8),
+                        _buildSummaryCard(
+                          'Stable',
+                          stablePatients.length,
+                          Colors.green,
+                          Icons.check_circle,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Critical Patients Section
+                  if (criticalPatients.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Text(
+                        'Critical Patients',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ),
+                    ...criticalPatients
+                        .map((patient) => PatientCard(patient: patient)),
+                  ],
+
+                  // Moderate Patients Section
+                  if (moderatePatients.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Text(
+                        'Moderate Patients',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange,
+                        ),
+                      ),
+                    ),
+                    ...moderatePatients
+                        .map((patient) => PatientCard(patient: patient)),
+                  ],
+
+                  // Stable Patients Section
+                  if (stablePatients.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Text(
+                        'Stable Patients',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                    ),
+                    ...stablePatients.map((patient) => PatientCard(patient: patient)),
+                  ],
                 ],
               ),
             ),
-
-            // Critical Patients Section
-            if (criticalPatients.isNotEmpty) ...[
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  'Critical Patients',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red,
-                  ),
-                ),
-              ),
-              ...criticalPatients
-                  .map((patient) => PatientCard(patient: patient)),
-            ],
-
-            // Moderate Patients Section
-            if (moderatePatients.isNotEmpty) ...[
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  'Moderate Patients',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.orange,
-                  ),
-                ),
-              ),
-              ...moderatePatients
-                  .map((patient) => PatientCard(patient: patient)),
-            ],
-
-            // Stable Patients Section
-            if (stablePatients.isNotEmpty) ...[
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  'Stable Patients',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
-                  ),
-                ),
-              ),
-              ...stablePatients.map((patient) => PatientCard(patient: patient)),
-            ],
-          ],
-        ),
-      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(

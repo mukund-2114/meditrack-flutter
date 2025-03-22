@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/patient.dart';
 import '../models/clinical_data.dart';
 import 'add_clinical_data_screen.dart';
@@ -63,8 +64,8 @@ class ViewClinicalDataScreen extends StatelessWidget {
                         child: ListTile(
                           title: Text(data.type.name),
                           subtitle: Text(
-                            'Date: ${_formatDateTime(data.dateTime)}\n'
-                            'Value: ${data.value} ${data.unit}',
+                            'Date: ${_formatDateTime(data.testDate)}\n'
+                            'Value: ${data.readingValue} ${data.unitValue}',
                           ),
                           isThreeLine: true,
                         ),
@@ -90,7 +91,6 @@ class ViewClinicalDataScreen extends StatelessWidget {
   }
 
   String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} '
-        '${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+    return DateFormat('dd/MM/yyyy HH:mm').format(dateTime);
   }
 }

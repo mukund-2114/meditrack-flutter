@@ -195,10 +195,13 @@ class _AddClinicalDataScreenState extends State<AddClinicalDataScreen> {
                   onPressed: () {
                     if (_formKey.currentState!.validate()) {
                       final newData = ClinicalData(
+                        patientId: widget.patient.id ?? '',
+                        userId: 'user123', // This should be replaced with actual user ID from provider
                         type: _selectedType,
+                        reading: double.tryParse(_valueController.text) ?? 0.0,
+                        testDate: _selectedDateTime,
                         value: _valueController.text,
                         unit: _getUnitForType(_selectedType),
-                        dateTime: _selectedDateTime,
                       );
                       widget.patient.clinicalData.add(newData);
                       Navigator.pop(context, true);

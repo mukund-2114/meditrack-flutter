@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/patient_list_screen.dart';
 import '../screens/tests_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/menu_screen.dart';
 import '../models/patient.dart';
+import '../providers/patient_provider.dart';
+import '../config/api_config.dart';
+import 'package:http/http.dart' as http;
 
 class BottomNavController extends StatefulWidget {
   const BottomNavController({super.key});
@@ -15,98 +19,215 @@ class BottomNavController extends StatefulWidget {
 
 class _BottomNavControllerState extends State<BottomNavController> {
   int _selectedIndex = 0;
-
-  // Create a list of demo patients
-  final List<Patient> _patients = [
-    Patient(
-      id: '1',
-      name: 'John Doe',
-      age: 45,
-      condition: 'Hypertension',
-      lastChecked: DateTime.now(),
-      status: PatientStatus.critical,
-      careNotes: 'Needs immediate attention, BP: 180/110',
-    ),
-    Patient(
-      id: '2',
-      name: 'Jane Smith',
-      age: 32,
-      condition: 'Diabetes Type 2',
-      lastChecked: DateTime.now().subtract(const Duration(days: 2)),
-      status: PatientStatus.stable,
-      careNotes: 'Regular insulin checks, diet controlled',
-    ),
-    Patient(
-      id: '3',
-      name: 'Robert Johnson',
-      age: 58,
-      condition: 'Heart Disease',
-      lastChecked: DateTime.now().subtract(const Duration(hours: 12)),
-      status: PatientStatus.critical,
-      careNotes: 'Recent chest pain, ECG needed',
-    ),
-    Patient(
-      id: '4',
-      name: 'Mary Williams',
-      age: 28,
-      condition: 'Asthma',
-      lastChecked: DateTime.now().subtract(const Duration(days: 1)),
-      status: PatientStatus.moderate,
-      careNotes: 'Seasonal allergies affecting condition',
-    ),
-    Patient(
-      id: '5',
-      name: 'David Brown',
-      age: 50,
-      condition: 'Arthritis',
-      lastChecked: DateTime.now().subtract(const Duration(days: 5)),
-      status: PatientStatus.stable,
-      careNotes: 'Physical therapy ongoing, good progress',
-    ),
-    Patient(
-      id: '6',
-      name: 'Sarah Davis',
-      age: 41,
-      condition: 'Pneumonia',
-      lastChecked: DateTime.now().subtract(const Duration(hours: 6)),
-      status: PatientStatus.critical,
-      careNotes: 'Oxygen levels need monitoring',
-    ),
-    Patient(
-      id: '7',
-      name: 'Michael Wilson',
-      age: 35,
-      condition: 'Post-Surgery Recovery',
-      lastChecked: DateTime.now().subtract(const Duration(days: 3)),
-      status: PatientStatus.moderate,
-      careNotes: 'Wound healing well, physiotherapy started',
-    ),
-    Patient(
-      id: '8',
-      name: 'Emma Taylor',
-      age: 62,
-      condition: 'COPD',
-      lastChecked: DateTime.now().subtract(const Duration(days: 1)),
-      status: PatientStatus.moderate,
-      careNotes: 'Regular nebulizer treatment',
-    ),
-  ];
-
-  late final List<Widget> _screens;
+  bool _isLoading = true;
+  bool _isError = false;
+  String _errorMessage = '';
+  List<Patient> _patients = [];
+  int _retryCount = 0;
+  static const int _maxRetries = 3;
 
   @override
   void initState() {
     super.initState();
-    _screens = [
-      DashboardScreen(patients: _patients),
-      const ProfileScreen(),
-      TestsScreen(patients: _patients),
-      MenuScreen(patients: _patients),
-    ];
+    // Delay the fetch slightly to ensure proper widget initialization
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkApiAndFetchData();
+    });
+  }
+
+  // Check API availability before fetching data
+  Future<void> _checkApiAndFetchData() async {
+    if (!mounted) return;
+    
+    setState(() {
+      _isLoading = true;
+      _isError = false;
+      _errorMessage = '';
+    });
+
+    try {
+      // First, check if the API is available
+      print('Checking API availability...');
+      final isAvailable = await ApiConfig.checkApiAvailability();
+      
+      if (!isAvailable) {
+        print('API is not available, sending wake-up request...');
+        // Try to wake up the server with a simple GET request
+        try {
+          await http.get(Uri.parse(ApiConfig.baseUrl)).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              print('Wake-up request timed out');
+              throw Exception('Server wake-up timed out');
+            },
+          );
+          print('Wake-up request sent');
+        } catch (e) {
+          print('Wake-up request failed: $e');
+          // Continue anyway, the server might be waking up
+        }
+        
+        // Wait a bit for the server to wake up
+        await Future.delayed(const Duration(seconds: 2));
+      }
+      
+      // Now fetch the data
+      await _fetchPatients();
+    } catch (e) {
+      if (!mounted) return;
+      
+      setState(() {
+        _isLoading = false;
+        _isError = true;
+        _errorMessage = 'Failed to connect to server: ${e.toString()}';
+      });
+      
+      _showErrorSnackBar();
+    }
+  }
+
+  Future<void> _fetchPatients() async {
+    if (!mounted) return;
+    
+    setState(() {
+      _isLoading = true;
+      _isError = false;
+    });
+
+    try {
+      final patientProvider = Provider.of<PatientProvider>(context, listen: false);
+      await patientProvider.fetchAllPatients(); 
+      await patientProvider.fetchCriticalPatients(); 
+      
+      if (!mounted) return;
+      
+      final patients = patientProvider.patients;
+      
+      setState(() {
+        _patients = patients;
+        _isLoading = false;
+        _retryCount = 0; // Reset retry count on success
+      });
+      
+      // If we got no patients but no error occurred, show a message
+      if (patients.isEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No patients found. Add patients to get started.'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      
+      setState(() {
+        _isLoading = false;
+        _isError = true;
+        _errorMessage = e.toString();
+      });
+      
+      _showErrorSnackBar();
+    }
+  }
+  
+  void _showErrorSnackBar() {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Error loading data: $_errorMessage'),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'Retry',
+          textColor: Colors.white,
+          onPressed: () {
+            _retryCount++;
+            if (_retryCount <= _maxRetries) {
+              // Add increasing delay for each retry
+              Future.delayed(Duration(seconds: _retryCount), () {
+                _checkApiAndFetchData();
+              });
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Maximum retry attempts reached. Please try again later.'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          },
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    // Define screens with the fetched patients
+    final List<Widget> screens = [
+      _isLoading 
+          ? const Center(child: CircularProgressIndicator())
+          : _isError
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text('Error: $_errorMessage', 
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _checkApiAndFetchData,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF024A59),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              : DashboardScreen(
+                  patients: _patients,
+                  onRefresh: _checkApiAndFetchData,
+                ),
+      const ProfileScreen(),
+      _isLoading 
+          ? const Center(child: CircularProgressIndicator())
+          : _isError
+              ? Center(
+                  child: ElevatedButton(
+                    onPressed: _checkApiAndFetchData,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF024A59),
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Retry'),
+                  ),
+                )
+              : TestsScreen(patients: _patients),
+      _isLoading 
+          ? const Center(child: CircularProgressIndicator())
+          : _isError
+              ? Center(
+                  child: ElevatedButton(
+                    onPressed: _checkApiAndFetchData,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF024A59),
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Retry'),
+                  ),
+                )
+              : MenuScreen(patients: _patients),
+    ];
+
     return WillPopScope(
       onWillPop: () async {
         if (_selectedIndex != 0) {
@@ -120,7 +241,7 @@ class _BottomNavControllerState extends State<BottomNavController> {
       child: Scaffold(
         body: IndexedStack(
           index: _selectedIndex,
-          children: _screens,
+          children: screens,
         ),
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: _selectedIndex,

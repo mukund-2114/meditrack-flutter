@@ -1,7 +1,12 @@
-import 'clinical_data.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'clinical_data.dart';
 
-enum PatientStatus { stable, moderate, critical }
+enum PatientStatus { 
+  stable, 
+  moderate, 
+  critical 
+}
 
 extension PatientStatusExtension on PatientStatus {
   String get name {
@@ -25,51 +30,124 @@ extension PatientStatusExtension on PatientStatus {
         return Colors.red;
     }
   }
+  
+  static PatientStatus fromString(String status) {
+    switch (status.toLowerCase()) {
+      case 'critical':
+        return PatientStatus.critical;
+      case 'moderate':
+        return PatientStatus.moderate;
+      case 'stable':
+      default:
+        return PatientStatus.stable;
+    }
+  }
 }
 
 class Patient {
-  final String id;
+  final String? id;
+  final String userId;
   final String name;
-  final int age;
+  final DateTime dob;
+  final String gender;
+  final String? address;
+  final String? contactNumber;
+  final PatientStatus status;
   final String condition;
   final DateTime lastChecked;
-  final PatientStatus status;
-  final String? careNotes;
   final List<ClinicalData> clinicalData;
 
   Patient({
-    required this.id,
+    this.id,
+    required this.userId,
     required this.name,
-    required this.age,
-    required this.condition,
-    required this.lastChecked,
+    required this.dob,
+    required this.gender,
+    this.address,
+    this.contactNumber,
     required this.status,
-    this.careNotes,
-  }) : clinicalData = [
-          ClinicalData(
-            type: DataType.bloodPressure,
-            value: '120/80',
-            unit: 'mmHg',
-            dateTime: DateTime.now().subtract(const Duration(days: 1)),
-          ),
-          ClinicalData(
-            type: DataType.heartBeatRate,
-            value: '72',
-            unit: 'bpm',
-            dateTime: DateTime.now().subtract(const Duration(days: 2)),
-          ),
-          ClinicalData(
-            type: DataType.bloodOxygenLevel,
-            value: '98',
-            unit: '%',
-            dateTime: DateTime.now().subtract(const Duration(hours: 12)),
-          ),
-          ClinicalData(
-            type: DataType.respiratoryRate,
-            value: '16',
-            unit: 'breaths/min',
-            dateTime: DateTime.now().subtract(const Duration(days: 3)),
-          ),
-          // Add more sample data as needed
-        ];
+    this.condition = 'Unknown',
+    DateTime? lastChecked,
+    List<ClinicalData>? clinicalData,
+  }) : this.lastChecked = lastChecked ?? DateTime.now(),
+       this.clinicalData = clinicalData ?? [];
+
+  factory Patient.fromJson(Map<String, dynamic> json) {
+    try {
+      print('Parsing patient: ${json['name']}');
+      
+      // Safe date parsing
+      DateTime parsedDob;
+      try {
+        parsedDob = DateTime.parse(json['dob']);
+      } catch (e) {
+        print('Error parsing DOB: $e');
+        parsedDob = DateTime.now().subtract(const Duration(days: 365 * 30)); // Default to 30 years ago
+      }
+      
+      DateTime parsedLastChecked;
+      try {
+        parsedLastChecked = json['lastChecked'] != null 
+            ? DateTime.parse(json['lastChecked']) 
+            : DateTime.now();
+      } catch (e) {
+        print('Error parsing lastChecked: $e');
+        parsedLastChecked = DateTime.now();
+      }
+      
+      return Patient(
+        id: json['_id'],
+        userId: json['userId'] ?? '',
+        name: json['name'] ?? 'Unknown',
+        dob: parsedDob,
+        gender: json['gender'] ?? 'Other',
+        address: json['address'],
+        contactNumber: json['contactNumber'],
+        status: PatientStatusExtension.fromString(json['status'] ?? 'stable'),
+        condition: json['condition'] ?? 'Unknown',
+        lastChecked: parsedLastChecked,
+      );
+    } catch (e) {
+      print('Error creating Patient from JSON: $e');
+      print('JSON data: $json');
+      // Return a fallback patient
+      return Patient(
+        id: json['_id'] ?? 'unknown_id',
+        userId: json['userId'] ?? '',
+        name: json['name'] ?? 'Error: Invalid Data',
+        dob: DateTime.now().subtract(const Duration(days: 365 * 30)),
+        gender: 'Other',
+        status: PatientStatus.stable,
+      );
+    }
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'userId': userId,
+      'name': name,
+      'dob': dob.toIso8601String(),
+      'gender': gender,
+      'address': address,
+      'contactNumber': contactNumber,
+      'status': status == PatientStatus.critical 
+          ? 'critical' 
+          : (status == PatientStatus.moderate ? 'moderate' : 'stable'),
+      'condition': condition,
+      'lastChecked': lastChecked.toIso8601String(),
+    };
+  }
+
+  String get formattedDob => DateFormat('MMM dd, yyyy').format(dob);
+  
+  String get formattedLastChecked => DateFormat('MMM dd, yyyy').format(lastChecked);
+
+  int get age {
+    final today = DateTime.now();
+    int age = today.year - dob.year;
+    if (today.month < dob.month || (today.month == dob.month && today.day < dob.day)) {
+      age--;
+    }
+    return age;
+  }
 }

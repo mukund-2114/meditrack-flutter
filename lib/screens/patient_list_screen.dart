@@ -17,16 +17,20 @@ class _PatientListScreenState extends State<PatientListScreen> {
   final List<Patient> _patients = [
     Patient(
       id: '1',
+      userId: 'user123',
       name: 'John Doe',
-      age: 45,
+      dob: DateTime(1978, 5, 15),
+      gender: 'Male',
       condition: 'Hypertension',
       lastChecked: DateTime.now(),
       status: PatientStatus.critical,
     ),
     Patient(
       id: '2',
+      userId: 'user123',
       name: 'Jane Smith',
-      age: 32,
+      dob: DateTime(1991, 8, 22),
+      gender: 'Female',
       condition: 'Diabetes',
       lastChecked: DateTime.now(),
       status: PatientStatus.stable,
