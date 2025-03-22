@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/clinical_data.dart';
@@ -8,43 +9,113 @@ class ClinicalDataService {
   // Get all tests for a patient
   static Future<Map<String, dynamic>> getTestsByPatientId(String patientId) async {
     try {
+      // First check if user is logged in
       final token = await AuthService.getUserToken();
       
       if (token == null) {
+        print('ClinicalDataService: User not logged in');
         return {
           'success': false,
           'message': 'User not logged in',
         };
       }
       
+      print('ClinicalDataService: Fetching tests for patient: $patientId');
+      print('ClinicalDataService: Using token: ${token.substring(0, min(10, token.length))}...');
+      
+      // Check if API is available before making the request
+      final isApiAvailable = await ApiConfig.checkApiAvailability();
+      if (!isApiAvailable) {
+        print('ClinicalDataService: API not available, sending wake-up request');
+        try {
+          // Try to wake up the server
+          await http.get(Uri.parse(ApiConfig.baseUrl)).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              print('ClinicalDataService: Wake-up request timed out');
+              throw Exception('Server wake-up timed out');
+            },
+          );
+          // Wait a bit for the server to wake up
+          await Future.delayed(const Duration(seconds: 2));
+        } catch (e) {
+          print('ClinicalDataService: Wake-up request failed: $e');
+          // Continue anyway, the server might be waking up
+        }
+      }
+      
+      // Now make the actual request
       final response = await http.get(
         Uri.parse('${ApiConfig.tests}/$patientId/tests'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-      );
+      ).timeout(ApiConfig.timeout);
 
-      final responseData = jsonDecode(response.body);
+      print('ClinicalDataService: Response status code: ${response.statusCode}');
+      print('ClinicalDataService: Response body length: ${response.body.length}');
+      print('ClinicalDataService: Response body preview: ${response.body.substring(0, min(100, response.body.length))}...');
+      
+      // Try to parse the response body
+      dynamic responseData;
+      try {
+        responseData = jsonDecode(response.body);
+      } catch (e) {
+        print('ClinicalDataService: Error parsing response JSON: $e');
+        return {
+          'success': false,
+          'message': 'Invalid response format: ${e.toString()}',
+        };
+      }
       
       if (response.statusCode == 200) {
-        final List<dynamic> testsJson = responseData['data'] ?? [];
-        final List<ClinicalData> tests = testsJson
-            .map((json) => ClinicalData.fromJson(json))
-            .toList();
+        // Handle different response formats
+        List<dynamic> testsJson = [];
+        if (responseData is List) {
+          // If the response is directly a list
+          testsJson = responseData;
+        } else if (responseData is Map && responseData['data'] != null && responseData['data'] is List) {
+          // If the response has a data field with a list
+          testsJson = responseData['data'] as List<dynamic>;
+        } else if (responseData is Map) {
+          // Try to find any list in the response
+          responseData.forEach((key, value) {
+            if (value is List) {
+              testsJson = value;
+            }
+          });
+        }
+        
+        // Parse the clinical data objects
+        final List<ClinicalData> tests = [];
+        for (var json in testsJson) {
+          try {
+            tests.add(ClinicalData.fromJson(json));
+          } catch (e) {
+            print('ClinicalDataService: Error parsing clinical data: $e');
+            print('ClinicalDataService: Problematic JSON: $json');
+            // Continue with the next item
+          }
+        }
             
+        print('ClinicalDataService: Parsed ${tests.length} tests');
+        
         return {
           'success': true,
           'message': 'Tests retrieved successfully',
           'data': tests
         };
       } else {
+        final message = responseData is Map ? responseData['message'] : 'Failed to get tests';
+        print('ClinicalDataService: Error response: $message');
         return {
           'success': false,
-          'message': responseData['message'] ?? 'Failed to get tests',
+          'message': message,
         };
       }
     } catch (e) {
+      print('ClinicalDataService: Error fetching tests: $e');
       return {
         'success': false,
         'message': 'Error: ${e.toString()}',
@@ -58,11 +129,14 @@ class ClinicalDataService {
       final token = await AuthService.getUserToken();
       
       if (token == null) {
+        print('ClinicalDataService: User not logged in');
         return {
           'success': false,
           'message': 'User not logged in',
         };
       }
+      
+      print('ClinicalDataService: Fetching critical tests');
       
       final response = await http.get(
         Uri.parse(ApiConfig.criticalTests),
@@ -70,28 +144,69 @@ class ClinicalDataService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-      );
+      ).timeout(ApiConfig.timeout);
 
-      final responseData = jsonDecode(response.body);
+      print('ClinicalDataService: Critical response status: ${response.statusCode}');
+      print('ClinicalDataService: Response body preview: ${response.body.substring(0, min(100, response.body.length))}...');
+      
+      // Try to parse the response body
+      dynamic responseData;
+      try {
+        responseData = jsonDecode(response.body);
+      } catch (e) {
+        print('ClinicalDataService: Error parsing response JSON: $e');
+        return {
+          'success': false,
+          'message': 'Invalid response format: ${e.toString()}',
+        };
+      }
       
       if (response.statusCode == 200) {
-        final List<dynamic> testsJson = responseData['data'] ?? [];
-        final List<ClinicalData> tests = testsJson
-            .map((json) => ClinicalData.fromJson(json))
-            .toList();
+        // Handle different response formats
+        List<dynamic> testsJson = [];
+        if (responseData is List) {
+          // If the response is directly a list
+          testsJson = responseData;
+        } else if (responseData is Map && responseData['data'] != null && responseData['data'] is List) {
+          // If the response has a data field with a list
+          testsJson = responseData['data'] as List<dynamic>;
+        } else if (responseData is Map) {
+          // Try to find any list in the response
+          responseData.forEach((key, value) {
+            if (value is List) {
+              testsJson = value;
+            }
+          });
+        }
+        
+        // Parse the clinical data objects
+        final List<ClinicalData> tests = [];
+        for (var json in testsJson) {
+          try {
+            tests.add(ClinicalData.fromJson(json));
+          } catch (e) {
+            print('ClinicalDataService: Error parsing critical test: $e');
+            // Continue with the next item
+          }
+        }
             
+        print('ClinicalDataService: Parsed ${tests.length} critical tests');
+        
         return {
           'success': true,
           'message': 'Critical tests retrieved successfully',
           'data': tests
         };
       } else {
+        final message = responseData is Map ? responseData['message'] : 'Failed to get critical tests';
+        print('ClinicalDataService: Error response: $message');
         return {
           'success': false,
-          'message': responseData['message'] ?? 'Failed to get critical tests',
+          'message': message,
         };
       }
     } catch (e) {
+      print('ClinicalDataService: Error fetching critical tests: $e');
       return {
         'success': false,
         'message': 'Error: ${e.toString()}',
@@ -117,12 +232,28 @@ class ClinicalDataService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-      );
+      ).timeout(ApiConfig.timeout);
 
-      final responseData = jsonDecode(response.body);
+      print('ClinicalDataService: Get test by ID response status: ${response.statusCode}');
+      
+      dynamic responseData;
+      try {
+        responseData = jsonDecode(response.body);
+      } catch (e) {
+        print('ClinicalDataService: Error parsing response JSON: $e');
+        return {
+          'success': false,
+          'message': 'Invalid response format: ${e.toString()}',
+        };
+      }
       
       if (response.statusCode == 200) {
-        final testJson = responseData['data'];
+        dynamic testJson;
+        if (responseData is Map) {
+          testJson = responseData['data'] ?? responseData;
+        } else {
+          testJson = responseData;
+        }
         final test = ClinicalData.fromJson(testJson);
             
         return {
@@ -131,12 +262,14 @@ class ClinicalDataService {
           'data': test
         };
       } else {
+        final message = responseData is Map ? responseData['message'] : 'Failed to get test';
         return {
           'success': false,
-          'message': responseData['message'] ?? 'Failed to get test',
+          'message': message,
         };
       }
     } catch (e) {
+      print('ClinicalDataService: Error fetching test by ID: $e');
       return {
         'success': false,
         'message': 'Error: ${e.toString()}',
@@ -156,6 +289,8 @@ class ClinicalDataService {
         };
       }
       
+      print('ClinicalDataService: Adding test for patient: $patientId');
+      
       final response = await http.post(
         Uri.parse('${ApiConfig.tests}/$patientId/tests'),
         headers: {
@@ -163,12 +298,28 @@ class ClinicalDataService {
           'Authorization': 'Bearer $token',
         },
         body: jsonEncode(test.toJson()),
-      );
+      ).timeout(ApiConfig.timeout);
 
-      final responseData = jsonDecode(response.body);
+      print('ClinicalDataService: Add test response status: ${response.statusCode}');
+      
+      dynamic responseData;
+      try {
+        responseData = jsonDecode(response.body);
+      } catch (e) {
+        print('ClinicalDataService: Error parsing response JSON: $e');
+        return {
+          'success': false,
+          'message': 'Invalid response format: ${e.toString()}',
+        };
+      }
       
       if (response.statusCode == 201) {
-        final testJson = responseData['data'];
+        dynamic testJson;
+        if (responseData is Map) {
+          testJson = responseData['data'] ?? responseData;
+        } else {
+          testJson = responseData;
+        }
         final createdTest = ClinicalData.fromJson(testJson);
             
         return {
@@ -177,12 +328,14 @@ class ClinicalDataService {
           'data': createdTest
         };
       } else {
+        final message = responseData is Map ? responseData['message'] : 'Failed to add test';
         return {
           'success': false,
-          'message': responseData['message'] ?? 'Failed to add test',
+          'message': message,
         };
       }
     } catch (e) {
+      print('ClinicalDataService: Error adding test: $e');
       return {
         'success': false,
         'message': 'Error: ${e.toString()}',
@@ -209,12 +362,26 @@ class ClinicalDataService {
           'Authorization': 'Bearer $token',
         },
         body: jsonEncode(test.toJson()),
-      );
+      ).timeout(ApiConfig.timeout);
 
-      final responseData = jsonDecode(response.body);
+      dynamic responseData;
+      try {
+        responseData = jsonDecode(response.body);
+      } catch (e) {
+        print('ClinicalDataService: Error parsing response JSON: $e');
+        return {
+          'success': false,
+          'message': 'Invalid response format: ${e.toString()}',
+        };
+      }
       
       if (response.statusCode == 200) {
-        final testJson = responseData['data'];
+        dynamic testJson;
+        if (responseData is Map) {
+          testJson = responseData['data'] ?? responseData;
+        } else {
+          testJson = responseData;
+        }
         final updatedTest = ClinicalData.fromJson(testJson);
             
         return {
@@ -223,12 +390,14 @@ class ClinicalDataService {
           'data': updatedTest
         };
       } else {
+        final message = responseData is Map ? responseData['message'] : 'Failed to update test';
         return {
           'success': false,
-          'message': responseData['message'] ?? 'Failed to update test',
+          'message': message,
         };
       }
     } catch (e) {
+      print('ClinicalDataService: Error updating test: $e');
       return {
         'success': false,
         'message': 'Error: ${e.toString()}',
@@ -254,9 +423,18 @@ class ClinicalDataService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-      );
+      ).timeout(ApiConfig.timeout);
 
-      final responseData = jsonDecode(response.body);
+      dynamic responseData;
+      try {
+        responseData = jsonDecode(response.body);
+      } catch (e) {
+        print('ClinicalDataService: Error parsing response JSON: $e');
+        return {
+          'success': false,
+          'message': 'Invalid response format: ${e.toString()}',
+        };
+      }
       
       if (response.statusCode == 200) {
         return {
@@ -264,12 +442,14 @@ class ClinicalDataService {
           'message': 'Test deleted successfully',
         };
       } else {
+        final message = responseData is Map ? responseData['message'] : 'Failed to delete test';
         return {
           'success': false,
-          'message': responseData['message'] ?? 'Failed to delete test',
+          'message': message,
         };
       }
     } catch (e) {
+      print('ClinicalDataService: Error deleting test: $e');
       return {
         'success': false,
         'message': 'Error: ${e.toString()}',
