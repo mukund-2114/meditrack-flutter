@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/patient_card.dart';
 import '../models/patient.dart';
+import '../services/patient_service.dart';
 
 class PatientListScreen extends StatefulWidget {
   const PatientListScreen({super.key});
@@ -12,46 +13,52 @@ class PatientListScreen extends StatefulWidget {
 class _PatientListScreenState extends State<PatientListScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<Patient> _filteredPatients = [];
-
-  // Dummy data for demonstration
-  final List<Patient> _patients = [
-    Patient(
-      id: '1',
-      userId: 'user123',
-      name: 'John Doe',
-      dob: DateTime(1978, 5, 15),
-      gender: 'Male',
-      condition: 'Hypertension',
-      lastChecked: DateTime.now(),
-      status: PatientStatus.critical,
-    ),
-    Patient(
-      id: '2',
-      userId: 'user123',
-      name: 'Jane Smith',
-      dob: DateTime(1991, 8, 22),
-      gender: 'Female',
-      condition: 'Diabetes',
-      lastChecked: DateTime.now(),
-      status: PatientStatus.stable,
-    ),
-  ];
+  List<Patient> _allPatients = [];
+  bool _isLoading = true;
+  String _errorMessage = '';
 
   @override
   void initState() {
     super.initState();
-    _filteredPatients = _patients;
+    _loadPatients();
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+  Future<void> _loadPatients() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final result = await PatientService.getAllPatients();
+      
+      if (!mounted) return;
+      
+      if (result['success']) {
+        setState(() {
+          _allPatients = result['data'] as List<Patient>;
+          _filteredPatients = _allPatients;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = result['message'] ?? 'Failed to load patients';
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Error: ${e.toString()}';
+      });
+    }
   }
 
   void _searchPatients(String query) {
     setState(() {
-      _filteredPatients = _patients.where((patient) {
+      _filteredPatients = _allPatients.where((patient) {
         final nameLower = patient.name.toLowerCase();
         final conditionLower = patient.condition.toLowerCase();
         final searchLower = query.toLowerCase();
@@ -64,12 +71,24 @@ class _PatientListScreenState extends State<PatientListScreen> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Patient List'),
         backgroundColor: const Color(0xFF024A59),
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadPatients,
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -102,25 +121,43 @@ class _PatientListScreenState extends State<PatientListScreen> {
               onChanged: _searchPatients,
             ),
           ),
-          Expanded(
-            child: _filteredPatients.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No patients found',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
+          if (_isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_errorMessage.isNotEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  _errorMessage,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: _filteredPatients.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No patients found',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                        ),
                       ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: _filteredPatients.length,
+                      itemBuilder: (context, index) {
+                        return PatientCard(patient: _filteredPatients[index]);
+                      },
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(8),
-                    itemCount: _filteredPatients.length,
-                    itemBuilder: (context, index) {
-                      return PatientCard(patient: _filteredPatients[index]);
-                    },
-                  ),
-          ),
+            ),
         ],
       ),
     );

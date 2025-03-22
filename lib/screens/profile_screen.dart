@@ -25,8 +25,8 @@ class ProfileScreen extends StatelessWidget {
             _buildInfoCard(
               'Personal Information',
               [
-                _buildInfoRow(Icons.person, 'Name', 'Dr. John Doe'),
-                _buildInfoRow(Icons.email, 'Email', 'john.doe@example.com'),
+                _buildInfoRow(Icons.person, 'Name', 'Dr. Mukund Kapadia'),
+                _buildInfoRow(Icons.email, 'Email', 'mk@gmail.com'),
                 _buildInfoRow(Icons.phone, 'Phone', '+1 234 567 8900'),
                 _buildInfoRow(
                     Icons.location_on, 'Address', '123 Medical Center St'),

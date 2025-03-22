@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/patient.dart';
 import '../models/clinical_data.dart';
+import '../services/clinical_data_service.dart';
+import '../services/auth_service.dart';
+import '../config/api_config.dart';
 
 class AddClinicalDataScreen extends StatefulWidget {
   final Patient patient;
@@ -19,6 +22,8 @@ class _AddClinicalDataScreenState extends State<AddClinicalDataScreen> {
   late DataType _selectedType;
   final TextEditingController _valueController = TextEditingController();
   late DateTime _selectedDateTime;
+  bool _isLoading = false;
+  String _errorMessage = '';
 
   @override
   void initState() {
@@ -56,6 +61,82 @@ class _AddClinicalDataScreenState extends State<AddClinicalDataScreen> {
       }
     }
     return null;
+  }
+
+  Future<void> _saveTestData() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      // Check API availability first
+      final bool isApiAvailable = await ApiConfig.checkApiAvailability();
+      
+      if (!mounted) return;
+      
+      if (!isApiAvailable) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Server is not available. Please try again later.';
+        });
+        return;
+      }
+
+      // Get the current user ID
+      final userId = await AuthService.getUserId();
+      
+      if (!mounted) return;
+      
+      if (userId == null) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'User is not logged in. Please login again.';
+        });
+        return;
+      }
+
+      // Create clinical data object
+      final double? numericValue = _selectedType == DataType.bloodPressure
+          ? null  // For blood pressure, we store the value in the 'value' field as a string
+          : double.tryParse(_valueController.text);
+
+      final newData = ClinicalData(
+        patientId: widget.patient.id ?? '',
+        userId: userId,
+        type: _selectedType,
+        reading: numericValue ?? 0.0,
+        testDate: _selectedDateTime,
+        value: _valueController.text,
+        unit: _getUnitForType(_selectedType),
+      );
+
+      // Save clinical data to API
+      final result = await ClinicalDataService.addTest(widget.patient.id ?? '', newData);
+      
+      if (!mounted) return;
+      
+      if (result['success']) {
+        // Navigate back with success
+        Navigator.pop(context, true);
+      } else {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = result['message'];
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Error: ${e.toString()}';
+      });
+    }
   }
 
   @override
@@ -183,6 +264,17 @@ class _AddClinicalDataScreenState extends State<AddClinicalDataScreen> {
               ),
               const SizedBox(height: 24),
 
+              // Error message
+              if (_errorMessage.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    _errorMessage,
+                    style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+
               // Save Button
               SizedBox(
                 width: double.infinity,
@@ -192,22 +284,24 @@ class _AddClinicalDataScreenState extends State<AddClinicalDataScreen> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      final newData = ClinicalData(
-                        patientId: widget.patient.id ?? '',
-                        userId: 'user123', // This should be replaced with actual user ID from provider
-                        type: _selectedType,
-                        reading: double.tryParse(_valueController.text) ?? 0.0,
-                        testDate: _selectedDateTime,
-                        value: _valueController.text,
-                        unit: _getUnitForType(_selectedType),
-                      );
-                      widget.patient.clinicalData.add(newData);
-                      Navigator.pop(context, true);
-                    }
-                  },
-                  child: const Text('Save Test Result'),
+                  onPressed: _isLoading ? null : _saveTestData,
+                  child: _isLoading
+                    ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 3,
+                            ),
+                          ),
+                          SizedBox(width: 10),
+                          Text('Saving...'),
+                        ],
+                      )
+                    : const Text('Save Test Result'),
                 ),
               ),
             ],
