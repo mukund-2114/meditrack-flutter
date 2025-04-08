@@ -170,11 +170,15 @@ class PatientService {
       final token = await AuthService.getUserToken();
       
       if (token == null) {
+        print('PatientService: No token found');
         return {
           'success': false,
           'message': 'User not logged in',
         };
       }
+
+      print('PatientService: Adding patient with data: ${jsonEncode(patient.toJson())}');
+      print('PatientService: Using endpoint: ${ApiConfig.patients}');
       
       final response = await http.post(
         Uri.parse(ApiConfig.patients),
@@ -185,24 +189,49 @@ class PatientService {
         body: jsonEncode(patient.toJson()),
       );
 
+      print('PatientService: Response status code: ${response.statusCode}');
+      print('PatientService: Response body: ${response.body}');
+
       final responseData = jsonDecode(response.body);
       
-      if (response.statusCode == 201) {
-        final patientJson = responseData['data'];
-        final createdPatient = Patient.fromJson(patientJson);
-            
-        return {
-          'success': true,
-          'message': 'Patient added successfully',
-          'data': createdPatient
-        };
+      // Accept both 200 and 201 as success status codes
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        // Handle different response formats
+        Map<String, dynamic> patientJson;
+        if (responseData is Map<String, dynamic>) {
+          // If the response is the patient object directly
+          patientJson = responseData;
+        } else {
+          // If there's a nested data field
+          patientJson = (responseData['data'] ?? responseData) as Map<String, dynamic>;
+        }
+
+        try {
+          final createdPatient = Patient.fromJson(patientJson);
+          print('PatientService: Successfully created patient with ID: ${createdPatient.id}');
+          return {
+            'success': true,
+            'message': 'Patient added successfully',
+            'data': createdPatient
+          };
+        } catch (e) {
+          print('PatientService: Error parsing created patient: $e');
+          // Even if we can't parse the response, consider it a success if the server accepted it
+          return {
+            'success': true,
+            'message': 'Patient added successfully',
+            'data': patient
+          };
+        }
       } else {
+        print('PatientService: Failed to add patient. Status: ${response.statusCode}, Message: ${responseData['message']}');
         return {
           'success': false,
           'message': responseData['message'] ?? 'Failed to add patient',
         };
       }
     } catch (e) {
+      print('PatientService: Error adding patient: $e');
       return {
         'success': false,
         'message': 'Error: ${e.toString()}',
@@ -222,6 +251,9 @@ class PatientService {
         };
       }
       
+      print('Updating patient with ID: $patientId');
+      print('Update data: ${jsonEncode(patient.toJson())}');
+      
       final response = await http.put(
         Uri.parse('${ApiConfig.patients}/$patientId'),
         headers: {
@@ -231,24 +263,60 @@ class PatientService {
         body: jsonEncode(patient.toJson()),
       );
 
-      final responseData = jsonDecode(response.body);
-      
+      print('Update response status: ${response.statusCode}');
+      print('Update response body: ${response.body}');
+
       if (response.statusCode == 200) {
-        final patientJson = responseData['data'];
-        final updatedPatient = Patient.fromJson(patientJson);
-            
-        return {
-          'success': true,
-          'message': 'Patient updated successfully',
-          'data': updatedPatient
-        };
+        try {
+          final responseData = jsonDecode(response.body);
+          
+          // Handle different response formats
+          Map<String, dynamic> patientJson;
+          if (responseData is Map<String, dynamic>) {
+            if (responseData.containsKey('data')) {
+              patientJson = responseData['data'];
+            } else {
+              patientJson = responseData;
+            }
+          } else {
+            return {
+              'success': true,
+              'message': 'Patient updated successfully',
+              'data': patient  // Return the original patient if response format is unexpected
+            };
+          }
+
+          final updatedPatient = Patient.fromJson(patientJson);
+              
+          return {
+            'success': true,
+            'message': 'Patient updated successfully',
+            'data': updatedPatient
+          };
+        } catch (e) {
+          print('Error parsing update response: $e');
+          // Even if parsing fails, consider it a success if server returned 200
+          return {
+            'success': true,
+            'message': 'Patient updated successfully',
+            'data': patient
+          };
+        }
       } else {
+        String message;
+        try {
+          final responseData = jsonDecode(response.body);
+          message = responseData['message'] ?? 'Failed to update patient';
+        } catch (e) {
+          message = 'Failed to update patient';
+        }
         return {
           'success': false,
-          'message': responseData['message'] ?? 'Failed to update patient',
+          'message': message,
         };
       }
     } catch (e) {
+      print('Error updating patient: $e');
       return {
         'success': false,
         'message': 'Error: ${e.toString()}',

@@ -122,7 +122,10 @@ class DashboardScreen extends StatelessWidget {
                       ),
                     ),
                     ...criticalPatients
-                        .map((patient) => PatientCard(patient: patient)),
+                        .map((patient) => PatientCard(
+                              patient: patient,
+                              onRefresh: onRefresh,
+                            )),
                   ],
 
                   // Moderate Patients Section
@@ -139,7 +142,10 @@ class DashboardScreen extends StatelessWidget {
                       ),
                     ),
                     ...moderatePatients
-                        .map((patient) => PatientCard(patient: patient)),
+                        .map((patient) => PatientCard(
+                              patient: patient,
+                              onRefresh: onRefresh,
+                            )),
                   ],
 
                   // Stable Patients Section
@@ -155,19 +161,25 @@ class DashboardScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    ...stablePatients.map((patient) => PatientCard(patient: patient)),
+                    ...stablePatients.map((patient) => PatientCard(
+                          patient: patient,
+                          onRefresh: onRefresh,
+                        )),
                   ],
                 ],
               ),
             ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => const AddPatientScreen(),
             ),
           );
+          if (result != null && onRefresh != null) {
+            onRefresh!();
+          }
         },
         backgroundColor: const Color(0xFF024A59),
         child: const Icon(Icons.add, color: Colors.white),

@@ -123,18 +123,20 @@ class Patient {
   }
 
   Map<String, dynamic> toJson() {
+    // Format phone number to contain only digits
+    String? formattedPhone;
+    if (contactNumber != null && contactNumber!.isNotEmpty) {
+      formattedPhone = contactNumber!.replaceAll(RegExp(r'[^\d]'), '');
+    }
+
     return {
       'userId': userId,
       'name': name,
       'dob': dob.toIso8601String(),
       'gender': gender,
       'address': address,
-      'contactNumber': contactNumber,
-      'status': status == PatientStatus.critical 
-          ? 'critical' 
-          : (status == PatientStatus.moderate ? 'moderate' : 'stable'),
-      'condition': condition,
-      'lastChecked': lastChecked.toIso8601String(),
+      'contactNumber': formattedPhone,
+      'status': status == PatientStatus.critical ? 'Critical' : 'Stable',
     };
   }
 

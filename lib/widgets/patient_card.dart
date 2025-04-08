@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/patient.dart';
 import '../screens/view_clinical_data_screen.dart';
+import '../screens/edit_patient_screen.dart';
 
 class PatientCard extends StatelessWidget {
   final Patient patient;
+  final VoidCallback? onRefresh;
 
   const PatientCard({
     super.key,
     required this.patient,
+    this.onRefresh,
   });
 
   @override
@@ -93,8 +96,18 @@ class PatientCard extends StatelessWidget {
               TextButton.icon(
                 icon: const Icon(Icons.edit),
                 label: const Text('Edit'),
-                onPressed: () {
-                  // Add edit patient functionality
+                onPressed: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EditPatientScreen(
+                        patient: patient,
+                      ),
+                    ),
+                  );
+                  if (result != null && onRefresh != null) {
+                    onRefresh!();
+                  }
                 },
               ),
             ],
