@@ -3,6 +3,8 @@ import '../models/patient.dart';
 import '../services/patient_service.dart';
 import '../services/auth_service.dart';
 import '../config/api_config.dart';
+import 'package:intl/intl.dart';
+import 'dart:convert';
 
 class AddPatientScreen extends StatefulWidget {
   const AddPatientScreen({super.key});
@@ -14,27 +16,45 @@ class AddPatientScreen extends StatefulWidget {
 class _AddPatientScreenState extends State<AddPatientScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _ageController = TextEditingController();
-  final _conditionController = TextEditingController();
   final _addressController = TextEditingController();
   final _contactController = TextEditingController();
+  DateTime? _selectedDob;
+  String _selectedGender = 'Male';
   PatientStatus _selectedStatus = PatientStatus.stable;
-  String _selectedGender = 'Not specified';
   bool _isLoading = false;
   String _errorMessage = '';
 
   @override
   void dispose() {
     _nameController.dispose();
-    _ageController.dispose();
-    _conditionController.dispose();
     _addressController.dispose();
     _contactController.dispose();
     super.dispose();
   }
 
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDob ?? DateTime.now(),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null && picked != _selectedDob) {
+      setState(() {
+        _selectedDob = picked;
+      });
+    }
+  }
+
   Future<void> _savePatient() async {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (_selectedDob == null) {
+      setState(() {
+        _errorMessage = 'Please select date of birth';
+      });
       return;
     }
 
@@ -44,21 +64,9 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
     });
 
     try {
-      // Check API availability first
-      final bool isApiAvailable = await ApiConfig.checkApiAvailability();
+      final userId = await AuthService.getUserId();
       
       if (!mounted) return;
-      
-      if (!isApiAvailable) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'Server is not available. Please try again later.';
-        });
-        return;
-      }
-
-      // Get the current user ID
-      final userId = await AuthService.getUserId();
       
       if (userId == null) {
         setState(() {
@@ -68,248 +76,346 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
         return;
       }
 
-      // Create new patient object
-      final newPatient = Patient(
-        userId: userId,
-        name: _nameController.text,
-        dob: DateTime.now().subtract(Duration(days: 365 * int.parse(_ageController.text))), // Approximate DOB based on age
-        gender: _selectedGender,
-        condition: _conditionController.text,
-        status: _selectedStatus,
-        lastChecked: DateTime.now(),
-        address: _addressController.text,
-        contactNumber: _contactController.text,
-      );
+      // Create patient data exactly matching API requirements
+      final Map<String, dynamic> patientData = {
+        'userId': userId,
+        'name': _nameController.text.trim(),
+        'dob': _selectedDob!.toIso8601String(),
+        'gender': _selectedGender,
+        'address': _addressController.text.trim(),
+        'contactNumber': _contactController.text.trim(),
+        'status': _selectedStatus == PatientStatus.critical ? 'Critical' : 'Stable',
+      };
 
-      // Save patient to API
-      final result = await PatientService.addPatient(newPatient);
+      print('Sending patient data to API: ${jsonEncode(patientData)}');
+
+      // Check API availability with timeout
+      final bool isApiAvailable = await ApiConfig.checkApiAvailability().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => false,
+      );
+      
+      if (!mounted) return;
+      
+      if (!isApiAvailable) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Server is not available. Please try again later.';
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot connect to server. Please check your connection.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      print('API is available, proceeding with patient creation...');
+
+      // Save patient to API with timeout
+      final result = await PatientService.addPatient(Patient.fromJson(patientData)).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          throw Exception('Request timed out. Please try again.');
+        },
+      );
+      
+      print('API Response: $result');
       
       if (!mounted) return;
       
       if (result['success']) {
-        // Navigate back with the created patient
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Patient added successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Return to previous screen with the created patient data
         Navigator.pop(context, result['data']);
       } else {
         setState(() {
           _isLoading = false;
-          _errorMessage = result['message'];
+          _errorMessage = result['message'] ?? 'Failed to add patient';
         });
+        
+        // Show error in snackbar
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     } catch (e) {
       if (!mounted) return;
       
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Error: ${e.toString()}';
+        _errorMessage = e.toString();
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_errorMessage),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Patient'),
-        backgroundColor: const Color(0xFF024A59),
-        foregroundColor: Colors.white,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Profile Image Section
-              Center(
-                child: Stack(
-                  children: [
-                    const CircleAvatar(
-                      radius: 50,
-                      backgroundColor: Color(0xFF024A59),
-                      child: Icon(Icons.person, size: 50, color: Colors.white),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: CircleAvatar(
-                        backgroundColor: Colors.white,
-                        radius: 18,
-                        child: IconButton(
-                          icon: const Icon(Icons.camera_alt, size: 18),
-                          onPressed: () {
-                            // Implement image picker
-                          },
+    return PopScope(
+      canPop: !_isLoading,
+      onPopInvoked: (didPop) {
+        if (_isLoading) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please wait while saving...'),
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Add Patient'),
+          backgroundColor: const Color(0xFF024A59),
+          foregroundColor: Colors.white,
+        ),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(16.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Profile Image Section
+                      Center(
+                        child: Stack(
+                          children: [
+                            const CircleAvatar(
+                              radius: 50,
+                              backgroundColor: Color(0xFF024A59),
+                              child: Icon(Icons.person, size: 50, color: Colors.white),
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: CircleAvatar(
+                                backgroundColor: Colors.white,
+                                radius: 18,
+                                child: IconButton(
+                                  icon: const Icon(Icons.camera_alt, size: 18),
+                                  onPressed: () {
+                                    // Implement image picker
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-              // Form Fields
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Patient Name',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-                validator: (value) =>
-                    value?.isEmpty ?? true ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
+                      // Form Fields
+                      TextFormField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Patient Name *',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.person_outline),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Name is required';
+                          }
+                          if (value.length < 2) {
+                            return 'Name must be at least 2 characters';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
 
-              TextFormField(
-                controller: _ageController,
-                decoration: const InputDecoration(
-                  labelText: 'Age',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.calendar_today),
-                ),
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Required';
-                  }
-                  if (int.tryParse(value) == null) {
-                    return 'Please enter a valid number';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _addressController,
-                decoration: const InputDecoration(
-                  labelText: 'Address',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.location_on_outlined),
-                ),
-                validator: (value) =>
-                    value?.isEmpty ?? true ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _contactController,
-                decoration: const InputDecoration(
-                  labelText: 'Contact Number',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.phone_outlined),
-                ),
-                keyboardType: TextInputType.phone,
-                validator: (value) =>
-                    value?.isEmpty ?? true ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _conditionController,
-                decoration: const InputDecoration(
-                  labelText: 'Medical Condition',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.medical_services_outlined),
-                ),
-                validator: (value) =>
-                    value?.isEmpty ?? true ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-
-              DropdownButtonFormField<String>(
-                value: _selectedGender,
-                decoration: const InputDecoration(
-                  labelText: 'Gender',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'Male',
-                    child: Text('Male'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Female',
-                    child: Text('Female'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Not specified',
-                    child: Text('Not specified'),
-                  ),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _selectedGender = value!;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-
-              DropdownButtonFormField<PatientStatus>(
-                value: _selectedStatus,
-                decoration: const InputDecoration(
-                  labelText: 'Patient Status',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.warning_outlined),
-                ),
-                items: PatientStatus.values.map((status) {
-                  return DropdownMenuItem(
-                    value: status,
-                    child: Text(status.name),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedStatus = value!;
-                  });
-                },
-              ),
-              const SizedBox(height: 24),
-
-              // Error message
-              if (_errorMessage.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    _errorMessage,
-                    style: const TextStyle(color: Colors.red),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-
-              ElevatedButton(
-                onPressed: _isLoading ? null : _savePatient,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF024A59),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.all(16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: _isLoading
-                    ? const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 3,
-                            ),
+                      // Date of Birth Field
+                      InkWell(
+                        onTap: () => _selectDate(context),
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Date of Birth *',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.calendar_today),
                           ),
-                          SizedBox(width: 10),
-                          Text('Saving...'),
+                          child: Text(
+                            _selectedDob == null
+                                ? 'Select Date of Birth'
+                                : DateFormat('MMM dd, yyyy').format(_selectedDob!),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _addressController,
+                        decoration: const InputDecoration(
+                          labelText: 'Address',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.location_on_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _contactController,
+                        decoration: const InputDecoration(
+                          labelText: 'Contact Number',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.phone_outlined),
+                          hintText: 'Enter 10 digit number',
+                        ),
+                        keyboardType: TextInputType.phone,
+                        maxLength: 10,
+                        onChanged: (value) {
+                          // Remove any non-digit characters
+                          final digitsOnly = value.replaceAll(RegExp(r'[^\d]'), '');
+                          if (digitsOnly != value) {
+                            _contactController.text = digitsOnly;
+                            _contactController.selection = TextSelection.fromPosition(
+                              TextPosition(offset: digitsOnly.length),
+                            );
+                          }
+                        },
+                        validator: (value) {
+                          if (value != null && value.isNotEmpty) {
+                            // Remove any non-digit characters for validation
+                            final digitsOnly = value.replaceAll(RegExp(r'[^\d]'), '');
+                            if (digitsOnly.length != 10) {
+                              return 'Phone number must be exactly 10 digits';
+                            }
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      DropdownButtonFormField<String>(
+                        value: _selectedGender,
+                        decoration: const InputDecoration(
+                          labelText: 'Gender *',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.person_outline),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'Male',
+                            child: Text('Male'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Female',
+                            child: Text('Female'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Other',
+                            child: Text('Other'),
+                          ),
                         ],
-                      )
-                    : const Text('Add Patient'),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _selectedGender = value;
+                            });
+                          }
+                        },
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please select a gender';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      DropdownButtonFormField<String>(
+                        value: _selectedStatus == PatientStatus.critical ? 'Critical' : 'Stable',
+                        decoration: const InputDecoration(
+                          labelText: 'Patient Status',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.warning_outlined),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'Stable',
+                            child: Text('Stable'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Critical',
+                            child: Text('Critical'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _selectedStatus = value == 'Critical' ? PatientStatus.critical : PatientStatus.stable;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Error message
+                      if (_errorMessage.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Text(
+                            _errorMessage,
+                            style: const TextStyle(color: Colors.red),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+
+                      ElevatedButton(
+                        onPressed: _isLoading ? null : _savePatient,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF024A59),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.all(16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: _isLoading
+                            ? const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 3,
+                                    ),
+                                  ),
+                                  SizedBox(width: 10),
+                                  Text('Saving...'),
+                                ],
+                              )
+                            : const Text('Add Patient'),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ],
-          ),
-        ),
       ),
     );
   }
