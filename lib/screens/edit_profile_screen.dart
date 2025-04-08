@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import '../models/user.dart';
+import '../services/auth_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
-  const EditProfileScreen({super.key});
+  final User? user;
+
+  const EditProfileScreen({
+    super.key,
+    this.user,
+  });
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();

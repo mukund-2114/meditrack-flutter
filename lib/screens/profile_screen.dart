@@ -1,8 +1,54 @@
 import 'package:flutter/material.dart';
+import '../models/user.dart';
+import '../services/auth_service.dart';
 import 'edit_profile_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  User? _user;
+  bool _isLoading = true;
+  String _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    setState(() {
+      _isLoading = true;
+      _error = '';
+    });
+
+    try {
+      final result = await AuthService.getCurrentUser();
+      
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          if (result['success']) {
+            _user = result['data'];
+          } else {
+            _error = result['message'];
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,47 +57,100 @@ class ProfileScreen extends StatelessWidget {
         title: const Text('Profile'),
         backgroundColor: const Color(0xFF024A59),
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadUserData,
+            tooltip: 'Refresh',
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const CircleAvatar(
-              radius: 50,
-              backgroundColor: Color(0xFF024A59),
-              child: Icon(Icons.person, size: 50, color: Colors.white),
-            ),
-            const SizedBox(height: 16),
-            _buildInfoCard(
-              'Personal Information',
-              [
-                _buildInfoRow(Icons.person, 'Name', 'Dr. Mukund Kapadia'),
-                _buildInfoRow(Icons.email, 'Email', 'mk@gmail.com'),
-                _buildInfoRow(Icons.phone, 'Phone', '+1 234 567 8900'),
-                _buildInfoRow(
-                    Icons.location_on, 'Address', '123 Medical Center St'),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildInfoCard(
-              'Work Information',
-              [
-                _buildInfoRow(Icons.work, 'Department', 'Cardiology'),
-                _buildInfoRow(Icons.badge, 'Experience', '15 years'),
-                _buildInfoRow(Icons.people, 'Patients', '150+'),
-              ],
-            ),
-          ],
-        ),
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error.isNotEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: Colors.red,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _error,
+                        style: const TextStyle(color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadUserData,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF024A59),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _loadUserData,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 50,
+                          backgroundColor: const Color(0xFF024A59),
+                          backgroundImage: _user?.profileImage != null
+                              ? NetworkImage(_user!.profileImage!)
+                              : null,
+                          child: _user?.profileImage == null
+                              ? const Icon(Icons.person,
+                                  size: 50, color: Colors.white)
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildInfoCard(
+                          'Personal Information',
+                          [
+                            _buildInfoRow(
+                                Icons.person, 'Name', _user?.name ?? _user?.username ?? 'N/A'),
+                            _buildInfoRow(
+                                Icons.email, 'Email', _user?.email ?? 'N/A'),
+                            _buildInfoRow(Icons.phone, 'Phone',
+                                _user?.phone ?? 'Not provided'),
+                            _buildInfoRow(Icons.location_on, 'Address',
+                                _user?.address ?? 'Not provided'),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildInfoCard(
+                          'Work Information',
+                          [
+                            _buildInfoRow(Icons.work, 'Department',
+                                _user?.department ?? 'Not specified'),
+                            _buildInfoRow(Icons.badge, 'Experience',
+                                _user?.experience ?? 'Not specified'),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => const EditProfileScreen(),
+              builder: (context) => EditProfileScreen(user: _user),
             ),
           );
+          if (result == true) {
+            _loadUserData();
+          }
         },
         backgroundColor: const Color(0xFF024A59),
         child: const Icon(Icons.edit, color: Colors.white),
@@ -89,24 +188,26 @@ class ProfileScreen extends StatelessWidget {
         children: [
           Icon(icon, color: const Color(0xFF024A59), size: 20),
           const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 12,
+                  ),
                 ),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

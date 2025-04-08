@@ -2,8 +2,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
+import '../models/user.dart';
 
 class AuthService {
+  static const String _tokenKey = 'token';
+  static const String _userIdKey = 'userId';
+
   // Store user token
   static Future<bool> storeUserToken(String token, String userId) async {
     final prefs = await SharedPreferences.getInstance();
@@ -147,6 +151,144 @@ class AuthService {
         };
       }
     } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Get current user
+  static Future<Map<String, dynamic>> getCurrentUser() async {
+    try {
+      final token = await getUserToken();
+      print('Retrieved token for getCurrentUser: $token');
+      
+      if (token == null) {
+        return {
+          'success': false,
+          'message': 'User not logged in',
+        };
+      }
+      
+      print('Fetching current user data...');
+      final response = await http.post(
+        Uri.parse('${ApiConfig.rootUrl}/api/users/getUser'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'token': token,
+        }),
+      ).timeout(ApiConfig.timeout);
+
+      print('Get user response status: ${response.statusCode}');
+      print('Get user response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        try {
+          final responseData = jsonDecode(response.body);
+          final user = User.fromJson(responseData);
+          
+          return {
+            'success': true,
+            'message': 'User data retrieved successfully',
+            'data': user,
+          };
+        } catch (e) {
+          print('Error parsing user data: $e');
+          return {
+            'success': false,
+            'message': 'Error parsing user data: ${e.toString()}',
+          };
+        }
+      } else if (response.statusCode == 401) {
+        // Clear token if unauthorized
+        await logout();
+        return {
+          'success': false,
+          'message': 'Session expired. Please login again.',
+        };
+      } else {
+        try {
+          final errorData = jsonDecode(response.body);
+          return {
+            'success': false,
+            'message': errorData['message'] ?? 'Failed to get user data',
+          };
+        } catch (e) {
+          return {
+            'success': false,
+            'message': 'Failed to get user data',
+          };
+        }
+      }
+    } catch (e) {
+      print('Error getting user data: $e');
+      return {
+        'success': false,
+        'message': 'Error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Update user
+  static Future<Map<String, dynamic>> updateUser(Map<String, dynamic> userData) async {
+    try {
+      final token = await getUserToken();
+      
+      if (token == null) {
+        return {
+          'success': false,
+          'message': 'User not logged in',
+        };
+      }
+      
+      print('Updating user data: $userData');
+      final response = await http.put(
+        Uri.parse('${ApiConfig.rootUrl}/api/users/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(userData),
+      ).timeout(ApiConfig.timeout);
+
+      print('Update user response status: ${response.statusCode}');
+      print('Update user response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        try {
+          final responseData = jsonDecode(response.body);
+          final user = User.fromJson(responseData);
+          
+          return {
+            'success': true,
+            'message': 'Profile updated successfully',
+            'data': user,
+          };
+        } catch (e) {
+          print('Error parsing updated user data: $e');
+          return {
+            'success': false,
+            'message': 'Error parsing updated user data',
+          };
+        }
+      } else {
+        String message;
+        try {
+          final responseData = jsonDecode(response.body);
+          message = responseData['message'] ?? 'Failed to update profile';
+        } catch (e) {
+          message = 'Failed to update profile';
+        }
+        return {
+          'success': false,
+          'message': message,
+        };
+      }
+    } catch (e) {
+      print('Error updating user: $e');
       return {
         'success': false,
         'message': 'Error: ${e.toString()}',
