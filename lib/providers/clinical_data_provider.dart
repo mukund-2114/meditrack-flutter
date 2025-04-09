@@ -126,7 +126,7 @@ class ClinicalDataProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await ClinicalDataService.updateTest(testId, test);
+      final result = await ClinicalDataService.updateTest(testId, test.toJson());
       
       if (result['success']) {
         final updatedTest = result['data'];

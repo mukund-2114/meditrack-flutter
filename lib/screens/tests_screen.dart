@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/patient.dart';
+import '../models/clinical_data.dart';
+import '../services/clinical_data_service.dart';
+import 'test_details_screen.dart';
+import 'package:intl/intl.dart';
 
-class TestsScreen extends StatelessWidget {
+class TestsScreen extends StatefulWidget {
   final List<Patient> patients;
 
   const TestsScreen({
@@ -10,12 +14,108 @@ class TestsScreen extends StatelessWidget {
   });
 
   @override
+  State<TestsScreen> createState() => _TestsScreenState();
+}
+
+class _TestsScreenState extends State<TestsScreen> {
+  bool _isLoading = true;
+  String _error = '';
+  List<ClinicalData> _allTests = [];
+  List<ClinicalData> _filteredTests = [];
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAllTests();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filterTests(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _filteredTests = _allTests;
+      } else {
+        _filteredTests = _allTests.where((test) {
+          final patient = widget.patients.firstWhere(
+            (p) => p.id == test.patientId,
+            orElse: () => Patient(
+              name: 'Unknown Patient',
+              userId: 'unknown',
+              dob: DateTime(1900),
+              gender: 'Unknown',
+              condition: 'Unknown',
+              status: PatientStatus.stable,
+            ),
+          );
+          
+          final testType = test.type.name.toLowerCase();
+          final patientName = patient.name.toLowerCase();
+          final date = DateFormat('dd/MM/yyyy').format(test.testDate).toLowerCase();
+          final searchLower = query.toLowerCase();
+
+          return testType.contains(searchLower) ||
+              patientName.contains(searchLower) ||
+              date.contains(searchLower);
+        }).toList();
+      }
+    });
+  }
+
+  Future<void> _loadAllTests() async {
+    setState(() {
+      _isLoading = true;
+      _error = '';
+    });
+
+    try {
+      List<ClinicalData> allTests = [];
+      
+      // Load tests for each patient
+      for (var patient in widget.patients) {
+        if (patient.id != null) {
+          final result = await ClinicalDataService.getTestsByPatientId(patient.id!);
+          if (result['success']) {
+            allTests.addAll(result['data'] as List<ClinicalData>);
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _allTests = allTests;
+          _filteredTests = allTests;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Medical Tests'),
         backgroundColor: const Color(0xFF024A59),
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadAllTests,
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -26,20 +126,31 @@ class TestsScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: TextField(
+                    controller: _searchController,
                     decoration: InputDecoration(
-                      hintText: 'Search tests...',
+                      hintText: 'Search by test type, patient or date...',
                       prefixIcon: const Icon(Icons.search),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                _filterTests('');
+                              },
+                            )
+                          : null,
                     ),
+                    onChanged: _filterTests,
                   ),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.filter_list),
                   onPressed: () {
-                    // Implement filter functionality
+                    // TODO: Implement filter functionality
                   },
                 ),
               ],
@@ -48,25 +159,89 @@ class TestsScreen extends StatelessWidget {
 
           // Tests List
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(8),
-              itemCount: patients.length,
-              itemBuilder: (context, index) {
-                final patient = patients[index];
-                return _buildTestCard(
-                  'Regular Checkup',
-                  patient.name,
-                  patient.lastChecked,
-                  TestStatus.pending,
-                );
-              },
-            ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _error.isNotEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.error_outline,
+                              size: 48,
+                              color: Colors.red,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              _error,
+                              style: const TextStyle(color: Colors.red),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: _loadAllTests,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF024A59),
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _filteredTests.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.search_off,
+                                  size: 64,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  _searchController.text.isEmpty
+                                      ? 'No tests found'
+                                      : 'No tests match your search',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(8),
+                            itemCount: _filteredTests.length,
+                            itemBuilder: (context, index) {
+                              final test = _filteredTests[index];
+                              final patient = widget.patients.firstWhere(
+                                (p) => p.id == test.patientId,
+                                orElse: () => Patient(
+                                  name: 'Unknown Patient',
+                                  userId: 'unknown',
+                                  dob: DateTime(1900),
+                                  gender: 'Unknown',
+                                  condition: 'Unknown',
+                                  status: PatientStatus.stable,
+                                ),
+                              );
+                              return _buildTestCard(
+                                test.type.name,
+                                patient.name,
+                                test.testDate,
+                                test.criticalFlag ? TestStatus.critical : TestStatus.completed,
+                              );
+                            },
+                          ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Navigate to add test screen
+          // TODO: Navigate to add test screen
         },
         backgroundColor: const Color(0xFF024A59),
         child: const Icon(Icons.add, color: Colors.white),
@@ -100,7 +275,34 @@ class TestsScreen extends StatelessWidget {
         ),
         trailing: _buildStatusChip(status),
         onTap: () {
-          // Navigate to test details
+          final test = _allTests.firstWhere(
+            (t) => t.type.name == testName && t.testDate == dateTime,
+          );
+          final patient = widget.patients.firstWhere(
+            (p) => p.id == test.patientId,
+            orElse: () => Patient(
+              name: 'Unknown Patient',
+              userId: 'unknown',
+              dob: DateTime(1900),
+              gender: 'Unknown',
+              condition: 'Unknown',
+              status: PatientStatus.stable,
+            ),
+          );
+          
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => TestDetailsScreen(
+                test: test,
+                patient: patient,
+              ),
+            ),
+          ).then((refreshNeeded) {
+            if (refreshNeeded == true) {
+              _loadAllTests();
+            }
+          });
         },
       ),
     );
@@ -128,16 +330,16 @@ class TestsScreen extends StatelessWidget {
 enum TestStatus {
   pending,
   completed,
-  cancelled;
+  critical;
 
   String get label {
     switch (this) {
       case TestStatus.pending:
         return 'Pending';
       case TestStatus.completed:
-        return 'Completed';
-      case TestStatus.cancelled:
-        return 'Cancelled';
+        return 'Normal';
+      case TestStatus.critical:
+        return 'Critical';
     }
   }
 
@@ -147,7 +349,7 @@ enum TestStatus {
         return Colors.orange;
       case TestStatus.completed:
         return Colors.green;
-      case TestStatus.cancelled:
+      case TestStatus.critical:
         return Colors.red;
     }
   }

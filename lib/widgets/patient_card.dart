@@ -63,7 +63,7 @@ class PatientCard extends StatelessWidget {
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Age: ${patient.age} | Condition: ${patient.condition}'),
+                  Text('Age: ${patient.age} | Gender: ${patient.gender}'),
                   Text(
                     'Last Checked: ${_formatDateTime(patient.lastChecked)}',
                     style: TextStyle(

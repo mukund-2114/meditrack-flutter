@@ -64,9 +64,9 @@ enum DataType {
       case DataType.bloodPressure:
         return 'Blood Pressure';
       case DataType.heartBeatRate:
-        return 'Heart Rate';
+        return 'Heartbeat Rate';
       case DataType.bloodOxygenLevel:
-        return 'Blood Oxygen';
+        return 'Blood Oxygen Level';
       case DataType.respiratoryRate:
         return 'Respiratory Rate';
     }

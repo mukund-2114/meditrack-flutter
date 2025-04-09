@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/patient.dart';
 import '../models/clinical_data.dart';
+import '../services/clinical_data_service.dart';
 import 'add_clinical_data_screen.dart';
+import 'test_details_screen.dart';
 
 class ClinicalDataListScreen extends StatefulWidget {
   final Patient patient;
@@ -184,6 +186,23 @@ class _ClinicalDataListScreenState extends State<ClinicalDataListScreen> {
                             'Date: ${_formatDateTime(data.dateTime)}',
                             style: const TextStyle(fontSize: 14),
                           ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => TestDetailsScreen(
+                                  test: data,
+                                  patient: widget.patient,
+                                ),
+                              ),
+                            ).then((refreshNeeded) {
+                              if (refreshNeeded == true) {
+                                setState(() {
+                                  _filterData(_selectedFilter);
+                                });
+                              }
+                            });
+                          },
                         ),
                       );
                     },

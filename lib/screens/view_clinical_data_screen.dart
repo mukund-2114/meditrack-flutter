@@ -6,6 +6,7 @@ import '../services/clinical_data_service.dart';
 import '../config/api_config.dart';
 import 'dart:async';
 import 'add_clinical_data_screen.dart';
+import 'test_details_screen.dart';
 
 class ViewClinicalDataScreen extends StatefulWidget {
   final Patient patient;
@@ -253,25 +254,76 @@ class _ViewClinicalDataScreenState extends State<ViewClinicalDataScreen> {
                         : ListView.builder(
                             itemCount: _clinicalData.length,
                             itemBuilder: (context, index) {
-                              final data = _clinicalData[index];
+                              final test = _clinicalData[index];
                               return Card(
                                 margin: const EdgeInsets.symmetric(
                                   horizontal: 16,
                                   vertical: 8,
                                 ),
                                 child: ListTile(
-                                  title: Text(data.type.name),
-                                  subtitle: Text(
-                                    'Date: ${_formatDateTime(data.testDate)}\n'
-                                    'Value: ${data.readingValue} ${data.unitValue}',
+                                  leading: CircleAvatar(
+                                    backgroundColor: test.criticalFlag 
+                                        ? Colors.red 
+                                        : const Color(0xFF024A59),
+                                    child: const Icon(
+                                      Icons.medical_services,
+                                      color: Colors.white,
+                                    ),
                                   ),
-                                  isThreeLine: true,
-                                  trailing: data.criticalFlag
-                                      ? const Icon(
-                                          Icons.warning,
-                                          color: Colors.red,
-                                        )
-                                      : null,
+                                  title: Text(test.type.name),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Reading: ${test.reading} ${test.type.unit}',
+                                      ),
+                                      Text(
+                                        'Date: ${DateFormat('dd/MM/yyyy HH:mm').format(test.testDate)}',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                  trailing: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: test.criticalFlag
+                                          ? Colors.red.withOpacity(0.1)
+                                          : Colors.green.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: test.criticalFlag
+                                            ? Colors.red
+                                            : Colors.green,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      test.criticalFlag ? 'Critical' : 'Normal',
+                                      style: TextStyle(
+                                        color: test.criticalFlag
+                                            ? Colors.red
+                                            : Colors.green,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => TestDetailsScreen(
+                                          test: test,
+                                          patient: widget.patient,
+                                        ),
+                                      ),
+                                    ).then((refreshNeeded) {
+                                      if (refreshNeeded == true) {
+                                        _loadClinicalData();
+                                      }
+                                    });
+                                  },
                                 ),
                               );
                             },

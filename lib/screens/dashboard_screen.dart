@@ -17,8 +17,6 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final criticalPatients =
         patients.where((p) => p.status == PatientStatus.critical).toList();
-    final moderatePatients =
-        patients.where((p) => p.status == PatientStatus.moderate).toList();
     final stablePatients =
         patients.where((p) => p.status == PatientStatus.stable).toList();
 
@@ -90,13 +88,7 @@ class DashboardScreen extends StatelessWidget {
                           Colors.red,
                           Icons.warning,
                         ),
-                        const SizedBox(width: 8),
-                        _buildSummaryCard(
-                          'Moderate',
-                          moderatePatients.length,
-                          Colors.orange,
-                          Icons.info,
-                        ),
+                      
                         const SizedBox(width: 8),
                         _buildSummaryCard(
                           'Stable',
@@ -128,26 +120,7 @@ class DashboardScreen extends StatelessWidget {
                             )),
                   ],
 
-                  // Moderate Patients Section
-                  if (moderatePatients.isNotEmpty) ...[
-                    const Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Text(
-                        'Moderate Patients',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.orange,
-                        ),
-                      ),
-                    ),
-                    ...moderatePatients
-                        .map((patient) => PatientCard(
-                              patient: patient,
-                              onRefresh: onRefresh,
-                            )),
-                  ],
-
+                 
                   // Stable Patients Section
                   if (stablePatients.isNotEmpty) ...[
                     const Padding(

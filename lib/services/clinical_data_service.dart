@@ -344,56 +344,57 @@ class ClinicalDataService {
   }
 
   // Update test
-  static Future<Map<String, dynamic>> updateTest(String testId, ClinicalData test) async {
+  static Future<Map<String, dynamic>> updateTest(String testId, Map<String, dynamic> data) async {
     try {
+      // Check API availability
+      final bool isApiAvailable = await ApiConfig.checkApiAvailability();
+      if (!isApiAvailable) {
+        return {
+          'success': false,
+          'message': 'Server is not available. Please try again later.',
+        };
+      }
+
+      // Get the token
       final token = await AuthService.getUserToken();
-      
       if (token == null) {
         return {
           'success': false,
-          'message': 'User not logged in',
+          'message': 'Authentication token not found. Please login again.',
         };
       }
-      
+
+      print('ClinicalDataService: Updating test with ID: $testId');
+      print('ClinicalDataService: Update data: $data');
+
+      // Make the API call
       final response = await http.put(
         Uri.parse('${ApiConfig.tests}/$testId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode(test.toJson()),
-      ).timeout(ApiConfig.timeout);
+        body: jsonEncode({
+          'dataType': data['dataType'],
+          'reading': data['reading'],
+          'testDate': data['testDate'],
+        }),
+      );
 
-      dynamic responseData;
-      try {
-        responseData = jsonDecode(response.body);
-      } catch (e) {
-        print('ClinicalDataService: Error parsing response JSON: $e');
-        return {
-          'success': false,
-          'message': 'Invalid response format: ${e.toString()}',
-        };
-      }
-      
+      print('ClinicalDataService: Update response status: ${response.statusCode}');
+      print('ClinicalDataService: Response body: ${response.body}');
+
       if (response.statusCode == 200) {
-        dynamic testJson;
-        if (responseData is Map) {
-          testJson = responseData['data'] ?? responseData;
-        } else {
-          testJson = responseData;
-        }
-        final updatedTest = ClinicalData.fromJson(testJson);
-            
+        final responseData = jsonDecode(response.body);
         return {
           'success': true,
+          'data': ClinicalData.fromJson(responseData),
           'message': 'Test updated successfully',
-          'data': updatedTest
         };
       } else {
-        final message = responseData is Map ? responseData['message'] : 'Failed to update test';
         return {
           'success': false,
-          'message': message,
+          'message': 'Failed to update test. Please try again.',
         };
       }
     } catch (e) {

@@ -246,12 +246,14 @@ class AuthService {
       
       print('Updating user data: $userData');
       final response = await http.put(
-        Uri.parse('${ApiConfig.rootUrl}/api/users/me'),
+        Uri.parse('${ApiConfig.rootUrl}/api/users/getUser'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
         },
-        body: jsonEncode(userData),
+        body: jsonEncode({
+          'token': token,
+          ...userData,
+        }),
       ).timeout(ApiConfig.timeout);
 
       print('Update user response status: ${response.statusCode}');

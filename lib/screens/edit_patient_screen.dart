@@ -382,32 +382,7 @@ class _EditPatientScreenState extends State<EditPatientScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      DropdownButtonFormField<String>(
-                        value: _selectedStatus == PatientStatus.critical ? 'Critical' : 'Stable',
-                        decoration: const InputDecoration(
-                          labelText: 'Patient Status',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.warning_outlined),
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'Stable',
-                            child: Text('Stable'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Critical',
-                            child: Text('Critical'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              _selectedStatus = value == 'Critical' ? PatientStatus.critical : PatientStatus.stable;
-                            });
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 24),
+                     
 
                       // Error message
                       if (_errorMessage.isNotEmpty)

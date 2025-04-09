@@ -4,7 +4,6 @@ import 'clinical_data.dart';
 
 enum PatientStatus { 
   stable, 
-  moderate, 
   critical 
 }
 
@@ -13,8 +12,7 @@ extension PatientStatusExtension on PatientStatus {
     switch (this) {
       case PatientStatus.stable:
         return 'Stable';
-      case PatientStatus.moderate:
-        return 'Moderate';
+  
       case PatientStatus.critical:
         return 'Critical';
     }
@@ -24,8 +22,7 @@ extension PatientStatusExtension on PatientStatus {
     switch (this) {
       case PatientStatus.stable:
         return Colors.green;
-      case PatientStatus.moderate:
-        return Colors.orange;
+
       case PatientStatus.critical:
         return Colors.red;
     }
@@ -35,8 +32,6 @@ extension PatientStatusExtension on PatientStatus {
     switch (status.toLowerCase()) {
       case 'critical':
         return PatientStatus.critical;
-      case 'moderate':
-        return PatientStatus.moderate;
       case 'stable':
       default:
         return PatientStatus.stable;
