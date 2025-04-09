@@ -4,14 +4,16 @@ import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/clinical_data.dart';
 import 'auth_service.dart';
+import 'patient_service.dart';
 
 class ClinicalDataService {
   // Get all tests for a patient
-  static Future<Map<String, dynamic>> getTestsByPatientId(String patientId) async {
+  static Future<Map<String, dynamic>> getTestsByPatientId(
+      String patientId) async {
     try {
       // First check if user is logged in
       final token = await AuthService.getUserToken();
-      
+
       if (token == null) {
         print('ClinicalDataService: User not logged in');
         return {
@@ -19,14 +21,16 @@ class ClinicalDataService {
           'message': 'User not logged in',
         };
       }
-      
+
       print('ClinicalDataService: Fetching tests for patient: $patientId');
-      print('ClinicalDataService: Using token: ${token.substring(0, min(10, token.length))}...');
-      
+      print(
+          'ClinicalDataService: Using token: ${token.substring(0, min(10, token.length))}...');
+
       // Check if API is available before making the request
       final isApiAvailable = await ApiConfig.checkApiAvailability();
       if (!isApiAvailable) {
-        print('ClinicalDataService: API not available, sending wake-up request');
+        print(
+            'ClinicalDataService: API not available, sending wake-up request');
         try {
           // Try to wake up the server
           await http.get(Uri.parse(ApiConfig.baseUrl)).timeout(
@@ -43,7 +47,7 @@ class ClinicalDataService {
           // Continue anyway, the server might be waking up
         }
       }
-      
+
       // Now make the actual request
       final response = await http.get(
         Uri.parse('${ApiConfig.tests}/$patientId/tests'),
@@ -53,10 +57,13 @@ class ClinicalDataService {
         },
       ).timeout(ApiConfig.timeout);
 
-      print('ClinicalDataService: Response status code: ${response.statusCode}');
-      print('ClinicalDataService: Response body length: ${response.body.length}');
-      print('ClinicalDataService: Response body preview: ${response.body.substring(0, min(100, response.body.length))}...');
-      
+      print(
+          'ClinicalDataService: Response status code: ${response.statusCode}');
+      print(
+          'ClinicalDataService: Response body length: ${response.body.length}');
+      print(
+          'ClinicalDataService: Response body preview: ${response.body.substring(0, min(100, response.body.length))}...');
+
       // Try to parse the response body
       dynamic responseData;
       try {
@@ -68,14 +75,16 @@ class ClinicalDataService {
           'message': 'Invalid response format: ${e.toString()}',
         };
       }
-      
+
       if (response.statusCode == 200) {
         // Handle different response formats
         List<dynamic> testsJson = [];
         if (responseData is List) {
           // If the response is directly a list
           testsJson = responseData;
-        } else if (responseData is Map && responseData['data'] != null && responseData['data'] is List) {
+        } else if (responseData is Map &&
+            responseData['data'] != null &&
+            responseData['data'] is List) {
           // If the response has a data field with a list
           testsJson = responseData['data'] as List<dynamic>;
         } else if (responseData is Map) {
@@ -86,7 +95,7 @@ class ClinicalDataService {
             }
           });
         }
-        
+
         // Parse the clinical data objects
         final List<ClinicalData> tests = [];
         for (var json in testsJson) {
@@ -98,16 +107,18 @@ class ClinicalDataService {
             // Continue with the next item
           }
         }
-            
+
         print('ClinicalDataService: Parsed ${tests.length} tests');
-        
+
         return {
           'success': true,
           'message': 'Tests retrieved successfully',
           'data': tests
         };
       } else {
-        final message = responseData is Map ? responseData['message'] : 'Failed to get tests';
+        final message = responseData is Map
+            ? responseData['message']
+            : 'Failed to get tests';
         print('ClinicalDataService: Error response: $message');
         return {
           'success': false,
@@ -127,7 +138,7 @@ class ClinicalDataService {
   static Future<Map<String, dynamic>> getCriticalTests() async {
     try {
       final token = await AuthService.getUserToken();
-      
+
       if (token == null) {
         print('ClinicalDataService: User not logged in');
         return {
@@ -135,9 +146,9 @@ class ClinicalDataService {
           'message': 'User not logged in',
         };
       }
-      
+
       print('ClinicalDataService: Fetching critical tests');
-      
+
       final response = await http.get(
         Uri.parse(ApiConfig.criticalTests),
         headers: {
@@ -146,9 +157,11 @@ class ClinicalDataService {
         },
       ).timeout(ApiConfig.timeout);
 
-      print('ClinicalDataService: Critical response status: ${response.statusCode}');
-      print('ClinicalDataService: Response body preview: ${response.body.substring(0, min(100, response.body.length))}...');
-      
+      print(
+          'ClinicalDataService: Critical response status: ${response.statusCode}');
+      print(
+          'ClinicalDataService: Response body preview: ${response.body.substring(0, min(100, response.body.length))}...');
+
       // Try to parse the response body
       dynamic responseData;
       try {
@@ -160,14 +173,16 @@ class ClinicalDataService {
           'message': 'Invalid response format: ${e.toString()}',
         };
       }
-      
+
       if (response.statusCode == 200) {
         // Handle different response formats
         List<dynamic> testsJson = [];
         if (responseData is List) {
           // If the response is directly a list
           testsJson = responseData;
-        } else if (responseData is Map && responseData['data'] != null && responseData['data'] is List) {
+        } else if (responseData is Map &&
+            responseData['data'] != null &&
+            responseData['data'] is List) {
           // If the response has a data field with a list
           testsJson = responseData['data'] as List<dynamic>;
         } else if (responseData is Map) {
@@ -178,7 +193,7 @@ class ClinicalDataService {
             }
           });
         }
-        
+
         // Parse the clinical data objects
         final List<ClinicalData> tests = [];
         for (var json in testsJson) {
@@ -189,16 +204,18 @@ class ClinicalDataService {
             // Continue with the next item
           }
         }
-            
+
         print('ClinicalDataService: Parsed ${tests.length} critical tests');
-        
+
         return {
           'success': true,
           'message': 'Critical tests retrieved successfully',
           'data': tests
         };
       } else {
-        final message = responseData is Map ? responseData['message'] : 'Failed to get critical tests';
+        final message = responseData is Map
+            ? responseData['message']
+            : 'Failed to get critical tests';
         print('ClinicalDataService: Error response: $message');
         return {
           'success': false,
@@ -218,14 +235,14 @@ class ClinicalDataService {
   static Future<Map<String, dynamic>> getTestById(String testId) async {
     try {
       final token = await AuthService.getUserToken();
-      
+
       if (token == null) {
         return {
           'success': false,
           'message': 'User not logged in',
         };
       }
-      
+
       final response = await http.get(
         Uri.parse('${ApiConfig.tests}/$testId'),
         headers: {
@@ -234,8 +251,9 @@ class ClinicalDataService {
         },
       ).timeout(ApiConfig.timeout);
 
-      print('ClinicalDataService: Get test by ID response status: ${response.statusCode}');
-      
+      print(
+          'ClinicalDataService: Get test by ID response status: ${response.statusCode}');
+
       dynamic responseData;
       try {
         responseData = jsonDecode(response.body);
@@ -246,7 +264,7 @@ class ClinicalDataService {
           'message': 'Invalid response format: ${e.toString()}',
         };
       }
-      
+
       if (response.statusCode == 200) {
         dynamic testJson;
         if (responseData is Map) {
@@ -255,14 +273,16 @@ class ClinicalDataService {
           testJson = responseData;
         }
         final test = ClinicalData.fromJson(testJson);
-            
+
         return {
           'success': true,
           'message': 'Test retrieved successfully',
           'data': test
         };
       } else {
-        final message = responseData is Map ? responseData['message'] : 'Failed to get test';
+        final message = responseData is Map
+            ? responseData['message']
+            : 'Failed to get test';
         return {
           'success': false,
           'message': message,
@@ -278,30 +298,34 @@ class ClinicalDataService {
   }
 
   // Add a new test
-  static Future<Map<String, dynamic>> addTest(String patientId, ClinicalData test) async {
+  static Future<Map<String, dynamic>> addTest(
+      String patientId, ClinicalData test) async {
     try {
       final token = await AuthService.getUserToken();
-      
+
       if (token == null) {
         return {
           'success': false,
           'message': 'User not logged in',
         };
       }
-      
-      print('ClinicalDataService: Adding test for patient: $patientId');
-      
-      final response = await http.post(
-        Uri.parse('${ApiConfig.tests}/$patientId/tests'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(test.toJson()),
-      ).timeout(ApiConfig.timeout);
 
-      print('ClinicalDataService: Add test response status: ${response.statusCode}');
-      
+      print('ClinicalDataService: Adding test for patient: $patientId');
+
+      final response = await http
+          .post(
+            Uri.parse('${ApiConfig.tests}/$patientId/tests'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode(test.toJson()),
+          )
+          .timeout(ApiConfig.timeout);
+
+      print(
+          'ClinicalDataService: Add test response status: ${response.statusCode}');
+
       dynamic responseData;
       try {
         responseData = jsonDecode(response.body);
@@ -312,7 +336,7 @@ class ClinicalDataService {
           'message': 'Invalid response format: ${e.toString()}',
         };
       }
-      
+
       if (response.statusCode == 201) {
         dynamic testJson;
         if (responseData is Map) {
@@ -321,14 +345,19 @@ class ClinicalDataService {
           testJson = responseData;
         }
         final createdTest = ClinicalData.fromJson(testJson);
-            
+
+        // Update patient status based on whether the test is critical
+        await _updatePatientStatusBasedOnTest(patientId, test.criticalFlag);
+
         return {
           'success': true,
-          'message': 'Test added successfully',
+          'message': 'Status updated successfully',
           'data': createdTest
         };
       } else {
-        final message = responseData is Map ? responseData['message'] : 'Failed to add test';
+        final message = responseData is Map
+            ? responseData['message']
+            : 'Failed to add test';
         return {
           'success': false,
           'message': message,
@@ -344,7 +373,8 @@ class ClinicalDataService {
   }
 
   // Update test
-  static Future<Map<String, dynamic>> updateTest(String testId, Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>> updateTest(
+      String testId, Map<String, dynamic> data) async {
     try {
       // Check API availability
       final bool isApiAvailable = await ApiConfig.checkApiAvailability();
@@ -381,14 +411,21 @@ class ClinicalDataService {
         }),
       );
 
-      print('ClinicalDataService: Update response status: ${response.statusCode}');
+      print(
+          'ClinicalDataService: Update response status: ${response.statusCode}');
       print('ClinicalDataService: Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
+        final updatedTest = ClinicalData.fromJson(responseData);
+
+        // Update patient status based on whether the test is critical
+        await _updatePatientStatusBasedOnTest(
+            updatedTest.patientId, updatedTest.criticalFlag);
+
         return {
           'success': true,
-          'data': ClinicalData.fromJson(responseData),
+          'data': updatedTest,
           'message': 'Test updated successfully',
         };
       } else {
@@ -406,18 +443,51 @@ class ClinicalDataService {
     }
   }
 
+  // Helper method to update patient status based on test criticality
+  static Future<void> _updatePatientStatusBasedOnTest(
+      String patientId, bool isCritical) async {
+    try {
+      // Determine the new status based on whether the test is critical
+      final String newStatus = isCritical ? 'Critical' : 'Stable';
+
+      print(
+          'ClinicalDataService: Updating patient status to $newStatus based on test criticality');
+
+      // Call the updatePatientStatus method from PatientService
+      final result =
+          await PatientService.updatePatientStatus(patientId, newStatus);
+
+      if (result['success']) {
+        print(
+            'ClinicalDataService: SUCCESS - Patient status updated to $newStatus');
+        print('ClinicalDataService: Patient ID: $patientId');
+        print('ClinicalDataService: API Response: ${result['message']}');
+
+        // If the result contains the updated patient data, print some details
+        if (result['data'] != null) {
+          print('ClinicalDataService: Updated patient data received');
+        }
+      } else {
+        print(
+            'ClinicalDataService: FAILED to update patient status: ${result['message']}');
+      }
+    } catch (e) {
+      print('ClinicalDataService: Error updating patient status: $e');
+    }
+  }
+
   // Delete test
   static Future<Map<String, dynamic>> deleteTest(String testId) async {
     try {
       final token = await AuthService.getUserToken();
-      
+
       if (token == null) {
         return {
           'success': false,
           'message': 'User not logged in',
         };
       }
-      
+
       final response = await http.delete(
         Uri.parse('${ApiConfig.tests}/$testId'),
         headers: {
@@ -436,14 +506,16 @@ class ClinicalDataService {
           'message': 'Invalid response format: ${e.toString()}',
         };
       }
-      
+
       if (response.statusCode == 200) {
         return {
           'success': true,
           'message': 'Test deleted successfully',
         };
       } else {
-        final message = responseData is Map ? responseData['message'] : 'Failed to delete test';
+        final message = responseData is Map
+            ? responseData['message']
+            : 'Failed to delete test';
         return {
           'success': false,
           'message': message,

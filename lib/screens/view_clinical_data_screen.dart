@@ -37,7 +37,7 @@ class _ViewClinicalDataScreenState extends State<ViewClinicalDataScreen> {
 
   Future<void> _loadClinicalData() async {
     if (!mounted) return;
-    
+
     setState(() {
       _isLoading = true;
       _hasError = false;
@@ -58,19 +58,20 @@ class _ViewClinicalDataScreenState extends State<ViewClinicalDataScreen> {
         setState(() {
           _isCheckingApiAvailability = true;
         });
-        
+
         final bool isApiAvailable = await ApiConfig.checkApiAvailability();
-        
+
         if (!mounted) return;
-        
+
         setState(() {
           _isCheckingApiAvailability = false;
         });
-        
+
         if (!isApiAvailable) {
           setState(() {
             _hasError = true;
-            _errorMessage = 'API server is not available. Please try again later.';
+            _errorMessage =
+                'API server is not available. Please try again later.';
             _isLoading = false;
           });
           return;
@@ -78,10 +79,11 @@ class _ViewClinicalDataScreenState extends State<ViewClinicalDataScreen> {
       }
 
       // Use the clinical data service to fetch data
-      final result = await ClinicalDataService.getTestsByPatientId(widget.patient.id!);
-      
+      final result =
+          await ClinicalDataService.getTestsByPatientId(widget.patient.id!);
+
       if (!mounted) return;
-      
+
       if (result['success']) {
         setState(() {
           _clinicalData = result['data'];
@@ -90,11 +92,13 @@ class _ViewClinicalDataScreenState extends State<ViewClinicalDataScreen> {
         });
       } else {
         // Handle empty data with retry
-        if (result['data'] != null && (result['data'] as List).isEmpty && _retryCount < 2) {
+        if (result['data'] != null &&
+            (result['data'] as List).isEmpty &&
+            _retryCount < 2) {
           _retryWithDelay();
           return;
         }
-        
+
         setState(() {
           _hasError = true;
           _errorMessage = result['message'];
@@ -103,12 +107,12 @@ class _ViewClinicalDataScreenState extends State<ViewClinicalDataScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      
+
       if (_retryCount < 3) {
         _retryWithDelay();
         return;
       }
-      
+
       setState(() {
         _hasError = true;
         _errorMessage = e.toString();
@@ -120,17 +124,18 @@ class _ViewClinicalDataScreenState extends State<ViewClinicalDataScreen> {
 
   void _retryWithDelay() {
     if (!mounted) return;
-    
+
     setState(() {
       _isRetrying = true;
       _retryCount++;
     });
-    
+
     // Exponential backoff for retries: 2s, 4s, 8s
     final delay = Duration(seconds: 2 * _retryCount);
-    
-    print('Retrying clinical data fetch (attempt $_retryCount) after ${delay.inSeconds}s delay');
-    
+
+    print(
+        'Retrying clinical data fetch (attempt $_retryCount) after ${delay.inSeconds}s delay');
+
     Timer(delay, () {
       if (mounted) {
         _fetchClinicalData();
@@ -171,12 +176,12 @@ class _ViewClinicalDataScreenState extends State<ViewClinicalDataScreen> {
                     ),
                   ),
                   Text('Age: ${widget.patient.age}'),
-                  Text('Condition: ${widget.patient.condition}'),
+                  // Text('Condition: ${widget.patient.condition}'),
                 ],
               ),
             ),
           ),
-          
+
           // Clinical Data List
           Expanded(
             child: _isLoading
@@ -187,9 +192,9 @@ class _ViewClinicalDataScreenState extends State<ViewClinicalDataScreen> {
                         const CircularProgressIndicator(),
                         const SizedBox(height: 16),
                         Text(
-                          _isRetrying 
-                              ? 'Retrying... (Attempt $_retryCount)' 
-                              : _isCheckingApiAvailability 
+                          _isRetrying
+                              ? 'Retrying... (Attempt $_retryCount)'
+                              : _isCheckingApiAvailability
                                   ? 'Checking server availability...'
                                   : 'Loading clinical data...',
                           style: const TextStyle(color: Colors.grey),
@@ -262,8 +267,8 @@ class _ViewClinicalDataScreenState extends State<ViewClinicalDataScreen> {
                                 ),
                                 child: ListTile(
                                   leading: CircleAvatar(
-                                    backgroundColor: test.criticalFlag 
-                                        ? Colors.red 
+                                    backgroundColor: test.criticalFlag
+                                        ? Colors.red
                                         : const Color(0xFF024A59),
                                     child: const Icon(
                                       Icons.medical_services,
@@ -272,7 +277,8 @@ class _ViewClinicalDataScreenState extends State<ViewClinicalDataScreen> {
                                   ),
                                   title: Text(test.type.name),
                                   subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         'Reading: ${test.reading} ${test.type.unit}',
@@ -332,15 +338,17 @@ class _ViewClinicalDataScreenState extends State<ViewClinicalDataScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _isLoading 
-            ? null 
+        onPressed: _isLoading
+            ? null
             : () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => AddClinicalDataScreen(patient: widget.patient),
+                    builder: (context) =>
+                        AddClinicalDataScreen(patient: widget.patient),
                   ),
-                ).then((_) => _loadClinicalData()); // Refresh after adding new data
+                ).then((_) =>
+                    _loadClinicalData()); // Refresh after adding new data
               },
         backgroundColor: _isLoading ? Colors.grey : const Color(0xFF024A59),
         child: const Icon(Icons.add, color: Colors.white),
